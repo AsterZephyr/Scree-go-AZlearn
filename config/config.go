@@ -11,18 +11,18 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/AsterZephyr/Scree-go-AZlearn/config/ipdns"
+	"github.com/AsterZephyr/Scree-go-AZlearn/config/mode"
 	"github.com/joho/godotenv"
 	"github.com/kelseyhightower/envconfig"
 	"github.com/rs/zerolog"
-	"github.com/AsterZephyr/Scree-go-AZlearn/config/ipdns"
-	"github.com/AsterZephyr/Scree-go-AZlearn/config/mode"
 )
 
 var (
 	prefix        = "screego"
 	files         = []string{"screego.config.development.local", "screego.config.development", "screego.config.local", "screego.config"}
 	absoluteFiles = []string{"/etc/screego/server.config"}
-	osExcutable   = os.Executable
+	osExecutable  = os.Executable
 	osStat        = os.Stat
 )
 
@@ -33,7 +33,7 @@ const (
 )
 
 type Config struct {
-	LogLevel   LogLevel `default:"info" spilt_words:"true"`
+	LogLevel   LogLevel `default:"info" split_words:"true"`
 	ExternalIP []string `split_words:"true"`
 
 	TLSCertFile string `split_words:"true"`
@@ -74,7 +74,7 @@ func (c *Config) parsePortRange() (uint16, uint16, error) {
 	}
 	parts := strings.Split(c.TurnPortRange, ":")
 	if len(parts) != 2 {
-		return 0, 0, error.New("must include one colon")
+		return 0, 0, errors.New("must include one colon")
 	}
 	stringMin := parts[0]
 	stringMax := parts[1]
@@ -94,21 +94,23 @@ func (c Config) PortRange() (uint16, uint16, bool) {
 	return min, max, min != 0 && max != 0
 }
 
+// Get loads the application config.
 func Get() (Config, []FutureLog) {
-	var log []FutureLog
+	var logs []FutureLog
 	dir, log := getExecutableOrWorkDir()
 	if log != nil {
 		logs = append(logs, *log)
 	}
-	for _, file := range getFIles(dir) {
+
+	for _, file := range getFiles(dir) {
 		_, fileErr := osStat(file)
 		if fileErr == nil {
 			if err := godotenv.Load(file); err != nil {
 				logs = append(logs, futureFatal(fmt.Sprintf("cannot load file %s: %s", file, err)))
 			} else {
-				logs = append(logs, futureInfo{
-					Level: zerolog.InfoLevel,
-					Msg:   fmt.Sprintf("loaded file %s", file),
+				logs = append(logs, FutureLog{
+					Level: zerolog.DebugLevel,
+					Msg:   fmt.Sprintf("Loading file %s", file),
 				})
 			}
 		} else if os.IsNotExist(fileErr) {
@@ -125,8 +127,9 @@ func Get() (Config, []FutureLog) {
 	err := envconfig.Process(prefix, &config)
 	if err != nil {
 		logs = append(logs,
-			futureFatal(fmt.Sprintf("cannot process env: %s", err)))
+			futureFatal(fmt.Sprintf("cannot parse env params: %s", err)))
 	}
+
 	if config.AuthMode != AuthModeTurn && config.AuthMode != AuthModeAll && config.AuthMode != AuthModeNone {
 		logs = append(logs,
 			futureFatal(fmt.Sprintf("invalid SCREEGO_AUTH_MODE: %s", config.AuthMode)))
@@ -232,6 +235,13 @@ func Get() (Config, []FutureLog) {
 	})
 
 	return config, logs
+}
+
+func logDeprecated() []FutureLog {
+	if os.Getenv("SCREEGO_TURN_STRICT_AUTH") != "" {
+		return []FutureLog{{Level: zerolog.WarnLevel, Msg: "The setting SCREEGO_TURN_STRICT_AUTH has been removed."}}
+	}
+	return nil
 }
 
 func getExecutableOrWorkDir() (string, *FutureLog) {

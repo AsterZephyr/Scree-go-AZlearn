@@ -1,7 +1,10 @@
 package ipdns
 
 import (
+	"context"
+	"errors"
 	"net"
+	"strings"
 	"sync"
 	"time"
 
@@ -19,13 +22,14 @@ type DNS struct {
 	v6      net.IP
 	err     error
 }
+
 func (s *DNS) Get() (net.IP, net.IP, error) {
 	s.Lock()
 	defer s.Unlock()
-	if s.refetch.Before(time.Now()){
-		oldV4,oldV6:=s.v4,s.v6
-		s.v4,s.v6,s.err=s.lookup()
-		if s.err==nil{
+	if s.refetch.Before(time.Now()) {
+		oldV4, oldV6 := s.v4, s.v6
+		s.v4, s.v6, s.err = s.lookup()
+		if s.err == nil {
 			if !oldV4.Equal(s.v4) || !oldV6.Equal(s.v6) {
 				log.Info().Str("v4", s.v4.String()).
 					Str("v6", s.v6.String()).
@@ -33,16 +37,16 @@ func (s *DNS) Get() (net.IP, net.IP, error) {
 					Str("dns", s.DNS).
 					Msg("DNS External IP")
 			}
-			s.refetch=time.Now().Add(time.Minute)
-		}else{
-			s.refetch=time.Now().Add(time.Second)
+			s.refetch = time.Now().Add(time.Minute)
+		} else {
+			s.refetch = time.Now().Add(time.Second)
 			log.Error().Err(s.err).Str("domain", s.Domain).Str("dns", s.DNS).Msg("DNS External IP")
 		}
 	}
 	return s.v4, s.v6, s.err
 }
 func (s *DNS) lookup() (net.IP, net.IP, error) {
-	ips,err :=s.Resolver.LookupIP(context.Background(), "ip", s.Domain)
+	ips, err := s.Resolver.LookupIP(context.Background(), "ip", s.Domain)
 	if err != nil {
 		if dns, ok := err.(*net.DNSError); ok && s.DNS != "system" {
 			dns.Server = ""
