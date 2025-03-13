@@ -1,0 +1,20 @@
+version: '3'
+
+services:
+  scree-go:
+    build: .
+    container_name: scree-go
+    ports:
+      - "5050:5050"
+      - "3478:3478"
+      - "3478:3478/udp"
+      - "50000-59999:50000-59999/udp"
+    environment:
+      - SCREEGO_EXTERNAL_IP=auto
+      - SCREEGO_SECRET=your-secret-key-here
+      - SCREEGO_LOG_LEVEL=info
+      - SCREEGO_AUTH_MODE=turn
+      - SCREEGO_TURN_PORT_RANGE=50000:59999
+    volumes:
+      - ./config:/etc/screego
+    restart: unless-stopped
